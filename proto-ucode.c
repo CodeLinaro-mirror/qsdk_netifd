@@ -16,7 +16,6 @@
 #include <ucode/vm.h>
 #include <ucode/lib.h>
 #include <ucode/types.h>
-#include <ucode/program.h>
 
 #include "netifd.h"
 #include "proto.h"
@@ -138,24 +137,26 @@ proto_ucode_attach(const struct proto_handler *h, struct interface *iface,
 	return &state->proto;
 }
 
+/* Invoke the stdlib sourcepath() function, which walks the call stack and
+ * returns the path of the script that called us (the proto handler script).
+ * Returns a newly allocated string or NULL. */
 static char *
 proto_ucode_get_script_path(uc_vm_t *vm)
 {
-	uc_callframe_t *frame;
-	uc_source_t *source;
+	uc_cfn_ptr_t sourcepath_fn = uc_stdlib_function("sourcepath");
+	uc_value_t *rv = NULL;
+	char *path = NULL;
 
-	for (size_t i = vm->callframes.count; i > 0; i--) {
-		frame = &vm->callframes.entries[i - 1];
+	if (sourcepath_fn) {
+		rv = sourcepath_fn(vm, 0);
 
-		if (!frame->closure)
-			continue;
+		if (ucv_type(rv) == UC_STRING)
+			path = ucv_to_string(vm, rv);
 
-		source = uc_program_function_source(frame->closure->function);
-		if (source && source->runpath)
-			return source->runpath;
+		ucv_put(rv);
 	}
 
-	return NULL;
+	return path;
 }
 
 uc_value_t *
